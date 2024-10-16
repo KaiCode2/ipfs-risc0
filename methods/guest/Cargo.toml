@@ -7,6 +7,10 @@ edition = "2021"
 name = "is-even"
 path = "src/bin/is_even.rs"
 
+[[bin]]
+name = "verify-cid"
+path = "src/bin/verify_cid.rs"
+
 [workspace]
 
 [dependencies]
