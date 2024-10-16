@@ -23,16 +23,35 @@ use alloy::{
 use alloy_primitives::{Address, U256};
 use anyhow::{Context, Result};
 use clap::Parser;
-use methods::IS_EVEN_ELF;
+use common::cid::{Attribute, ComputeCid, Player, Skill};
+use methods::VERIFY_CID_ELF;
 use risc0_ethereum_contracts::encode_seal;
 use risc0_zkvm::{default_prover, ExecutorEnv, ProverOpts, VerifierContext};
+use risc0_steel::{
+    ethereum::{EthEvmEnv, ETH_SEPOLIA_CHAIN_SPEC},
+    host::BlockNumberOrTag,
+    Commitment, Contract,
+};
+use tokio::task;
 use url::Url;
 
 // `IEvenNumber` interface automatically generated via the alloy `sol!` macro.
 alloy::sol!(
     #[sol(rpc, all_derives)]
-    "../contracts/IEvenNumber.sol"
+    "../contracts/Players.sol"
 );
+
+alloy::sol! {
+    interface IERC721 {
+        function tokenURI(uint256 tokenId) external view returns (string memory uri);
+        function ownerOf(uint256 tokenId) external view returns (address owner);
+    }
+
+    struct Journal {
+        Commitment commitment;
+        address owner;
+    }
+}
 
 /// Arguments of the publisher CLI.
 #[derive(Parser, Debug)]
@@ -43,23 +62,27 @@ struct Args {
     chain_id: u64,
 
     /// Ethereum Node endpoint.
-    #[clap(long, env)]
+    #[clap(long, env = "PRIV_KEY")]
     eth_wallet_private_key: PrivateKeySigner,
 
     /// Ethereum Node endpoint.
-    #[clap(long)]
+    #[clap(long, env = "RPC_URL_SEPOLIA")]
     rpc_url: Url,
 
-    /// Application's contract address on Ethereum
-    #[clap(long)]
-    contract: Address,
+    /// Optional Beacon API endpoint URL
+    ///
+    /// When provided, Steel uses a beacon block commitment instead of the execution block. This
+    /// allows proofs to be validated using the EIP-4788 beacon roots contract.
+    #[clap(long, env)]
+    beacon_api_url: Option<Url>,
 
-    /// The input to provide to the guest binary
-    #[clap(short, long)]
-    input: U256,
+    /// Address of the ERC20 token contract
+    #[clap(long, default_value = "ca991c3210075409787fe2a625c22b27fbA098f6")]
+    player_contract: Address,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     env_logger::init();
     // Parse CLI Arguments: The application starts by parsing command-line arguments provided by the user.
     let args = Args::parse();
@@ -73,43 +96,98 @@ fn main() -> Result<()> {
 
     // ABI encode input: Before sending the proof request to the Bonsai proving service,
     // the input number is ABI-encoded to match the format expected by the guest code running in the zkVM.
-    let input = args.input.abi_encode();
+    // let input = args.input.abi_encode();
 
-    let env = ExecutorEnv::builder().write_slice(&input).build()?;
+    let player = Player {
+        name: "Lionel Messi".to_string(),
+        jersey_number: 10,
+        description: "A professional footballer who plays as a forward for Paris Saint-Germain and the Argentina national team.".to_string(),
+        external_url: "https://en.wikipedia.org/wiki/Lionel_Messi".to_string(),
+        image: "https://upload.wikimedia.org/wikipedia/commons/4/47/Lionel_Messi_20180626.jpg".to_string(),
+        tier: 1,
+        overall_rating: 94.0,
+        skill_multiplier: 1.0,
+        skill: Skill {
+            speed: 90,
+            shooting: 95,
+            passing: 90,
+            dribbling: 96,
+            defense: 32,
+            physical: 68,
+            goal_tending: 0,
+        },
+        attributes: vec![
+            Attribute {
+                display_type: "Physical".to_string(),
+                trait_type: "Height".to_string(),
+                value: 170.0,
+            },
+            Attribute {
+                display_type: "Physical".to_string(),
+                trait_type: "Weight".to_string(),
+                value: 72.0,
+            },
+        ],
+    };
 
-    let receipt = default_prover()
-        .prove_with_ctx(
+    let token_id: U256 = U256::from(0);
+
+    let mut env = EthEvmEnv::builder()
+        .provider(provider.clone())
+        .block_number_or_tag(BlockNumberOrTag::Parent)
+        .build()
+        .await?;
+    env = env.with_chain_spec(&ETH_SEPOLIA_CHAIN_SPEC);
+
+    let mut contract = Contract::preflight(args.player_contract, &mut env);
+    let owner_call = IERC721::ownerOfCall {
+        tokenId: U256::from(token_id),
+    };
+    let uri_call = IERC721::tokenURICall {
+        tokenId: U256::from(token_id),
+    };
+    let owner_result =  contract.call_builder(&owner_call).call().await?;
+    let uri_result = contract.call_builder(&uri_call).call().await?;
+
+    println!("Owner: {:?}", owner_result.owner);
+    println!("URI: {:?}", uri_result.uri);
+    println!("Player CID: {:?}", player.formatted_cid());
+
+    let evm_input = if let Some(beacon_api_url) = args.beacon_api_url {
+        #[allow(deprecated)]
+        env.into_beacon_input(beacon_api_url).await?
+    } else {
+        env.into_input().await?
+    };
+
+    let prove_info = task::spawn_blocking(move || {
+        let env = ExecutorEnv::builder()
+            .write(&evm_input)?
+            .write(&player)?
+            .write(&token_id)?
+            .build()
+            .unwrap();
+
+        default_prover().prove_with_ctx(
             env,
             &VerifierContext::default(),
-            IS_EVEN_ELF,
+            VERIFY_CID_ELF,
             &ProverOpts::groth16(),
-        )?
-        .receipt;
+        )
+    })
+    .await?
+    .context("failed to create proof")?;
+    let receipt = prove_info.receipt;
+    let journal = &receipt.journal.bytes;
 
-    // Encode the seal with the selector.
-    let seal = encode_seal(&receipt)?;
+    // Decode and log the commitment
+    let journal = Journal::abi_decode(journal, true).context("invalid journal")?;
+    log::debug!("Steel commitment: {:?}", journal.commitment);
 
-    // Extract the journal from the receipt.
-    let journal = receipt.journal.bytes.clone();
+    // ABI encode the seal.
+    let seal = encode_seal(&receipt).context("invalid receipt")?;
 
-    // Decode Journal: Upon receiving the proof, the application decodes the journal to extract
-    // the verified number. This ensures that the number being submitted to the blockchain matches
-    // the number that was verified off-chain.
-    let x = U256::abi_decode(&journal, true).context("decoding journal data")?;
-
-    // Construct function call: Using the IEvenNumber interface, the application constructs
-    // the ABI-encoded function call for the set function of the EvenNumber contract.
-    // This call includes the verified number, the post-state digest, and the seal (proof).
-    let contract = IEvenNumber::new(args.contract, provider);
-    let call_builder = contract.set(x, seal.into());
-
-    // Initialize the async runtime environment to handle the transaction sending.
-    let runtime = tokio::runtime::Runtime::new()?;
-
-    // Send transaction: Finally, send the transaction to the Ethereum blockchain,
-    // effectively calling the set function of the EvenNumber contract with the verified number and proof.
-    let pending_tx = runtime.block_on(call_builder.send())?;
-    runtime.block_on(pending_tx.get_receipt())?;
+    println!("Journal: {:?}", journal.owner);
 
     Ok(())
 }

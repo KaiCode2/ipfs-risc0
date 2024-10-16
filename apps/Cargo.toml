@@ -4,6 +4,7 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+common = { path = "../methods/common" }
 alloy = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = { workspace = true }
@@ -14,5 +15,6 @@ log = { workspace = true }
 methods = { workspace = true }
 risc0-ethereum-contracts = { workspace = true }
 risc0-zkvm = { workspace = true, features = ["client"] }
+risc0-steel = { workspace = true, features = ["host"] }
 tokio = { version = "1.35", features = ["full"] }
 url = { workspace = true }
