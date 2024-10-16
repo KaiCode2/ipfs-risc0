@@ -19,7 +19,7 @@ include!(concat!(env!("OUT_DIR"), "/methods.rs"));
 mod tests {
     use alloy_primitives::U256;
     use alloy_sol_types::SolValue;
-    use common::cid::{Attribute, ComputeCid, Player, Skill};
+    // use core::cid::{Attribute, ComputeCid, Player, Skill};
     use risc0_zkvm::{default_executor, ExecutorEnv};
 
     #[test]

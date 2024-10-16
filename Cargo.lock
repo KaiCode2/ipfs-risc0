@@ -704,11 +704,13 @@ dependencies = [
  "alloy-primitives 0.8.5",
  "alloy-sol-types",
  "anyhow",
+ "array-init",
  "clap",
  "common",
  "env_logger",
  "log",
- "methods",
+ "methods-player",
+ "methods-team",
  "risc0-ethereum-contracts",
  "risc0-steel",
  "risc0-zkvm",
@@ -949,6 +951,12 @@ dependencies = [
  "num-traits",
  "rand",
 ]
+
+[[package]]
+name = "array-init"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d62b7694a562cdf5a74227903507c56ab2cc8bdd1f781ed5cb4cf9c9f810bfc"
 
 [[package]]
 name = "arrayref"
@@ -2752,12 +2760,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "methods"
+name = "methods-player"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives 0.8.5",
  "alloy-sol-types",
- "common",
+ "hex",
+ "risc0-build",
+ "risc0-build-ethereum",
+ "risc0-zkp",
+ "risc0-zkvm",
+]
+
+[[package]]
+name = "methods-team"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives 0.8.5",
+ "alloy-sol-types",
  "hex",
  "risc0-build",
  "risc0-build-ethereum",

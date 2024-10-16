@@ -4,15 +4,17 @@ version = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-common = { path = "../methods/common" }
+common = { workspace = true }
 alloy = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = { workspace = true }
 anyhow = { workspace = true }
+array-init = { version = "2.1.0" }
 clap = { version = "4.0", features = ["derive", "env"] }
 env_logger = { version = "0.10" }
 log = { workspace = true }
-methods = { workspace = true }
+methods-player = { workspace = true }
+methods-team = { workspace = true }
 risc0-ethereum-contracts = { workspace = true }
 risc0-zkvm = { workspace = true, features = ["client"] }
 risc0-steel = { workspace = true, features = ["host"] }

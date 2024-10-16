@@ -6,7 +6,7 @@ use alloy_sol_types::{sol, SolValue};
 use risc0_zkvm::guest::env;
 use risc0_steel::{ethereum::{EthEvmInput, ETH_SEPOLIA_CHAIN_SPEC}, Contract, Commitment};
 
-risc0_zkvm::guest::entry!(main);
+// risc0_zkvm::guest::entry!(main);
 
 sol! {
     interface IERC721 {

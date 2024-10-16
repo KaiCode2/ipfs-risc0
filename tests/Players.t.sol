@@ -16,14 +16,22 @@
 
 pragma solidity ^0.8.20;
 
-/// @title A starter application using RISC Zero.
-/// @notice This basic application holds a number, guaranteed to be even.
-/// @dev This contract demonstrates one pattern for offloading the computation of an expensive
-///      or difficult to implement function to a RISC Zero guest running on the zkVM.
-interface IEvenNumber {
-    /// @notice Set the even number stored on the contract. Requires a RISC Zero proof that the number is even.
-    function set(uint256 x, bytes calldata seal) external;
+import {RiscZeroCheats} from "risc0/test/RiscZeroCheats.sol";
+import {console2} from "forge-std/console2.sol";
+import {Test} from "forge-std/Test.sol";
+import {IRiscZeroVerifier} from "risc0/IRiscZeroVerifier.sol";
+import {Players} from "src/Players.sol";
 
-    /// @notice Returns the number stored.
-    function get() external view returns (uint256);
+contract PlayersTest is RiscZeroCheats, Test {
+    Players public players;
+
+    function setUp() public {
+        players = new Players();
+    }
+
+    function test_mint(uint256 tokenId) public {
+        bytes32 hash = keccak256(abi.encodePacked(tokenId));
+        players.mint(tokenId, hash);
+        assertEq(players.ownerOf(tokenId), address(this));
+    }
 }

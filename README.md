@@ -1,8 +1,10 @@
-# RISC Zero Foundry Template
+# IPFS RISC ZERO
 
-> Prove computation with the [RISC Zero zkVM] and verify the results in your Ethereum contract.
+> Prove knowledge of preimage content for an NFT with an IPFS token URI. Make verifiably correct use of NFTs' contents to create derivatives.
 
-This repository implements an example application on Ethereum utilizing RISC Zero as a [coprocessor] to the smart contract application.
+This repository implements an example application that take a `serde_json` seriazable type - in this case `Player` - and extend it with CID derivation functionality. Verify NFT's token URI matches a given player's CID. Using RISC0 proof composition, verify integrity of players which form a team and produce new team NFT which makes use of individual players.
+
+On Ethereum utilizing RISC Zero as a [coprocessor] to the smart contract application.
 It provides a starting point for building powerful new applications on Ethereum that offload work that is computationally intensive (i.e. gas expensive), or difficult to implement in Solidity (e.g. ed25519 signature verification, or HTML parsing).
 
 <!-- TODO(#100) Integrate support for Steel more directly into this repo -->

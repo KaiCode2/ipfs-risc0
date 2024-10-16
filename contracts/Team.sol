@@ -4,7 +4,8 @@ pragma solidity ^0.8.24;
 
 import {IRiscZeroVerifier} from "risc0/IRiscZeroVerifier.sol";
 import {Steel} from "risc0/steel/Steel.sol";
-import {ImageID} from "./ImageID.sol";
+import {ImageID as TeamImageID} from "./TeamImageID.sol";
+import {ImageID as PlayersImageID} from "./PlayersImageID.sol";
 
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -46,7 +47,7 @@ contract Team is ERC721Holder, ERC721EnumerableURI {
     IERC721 public immutable players;
 
     /// @notice Image ID of the team building zkVM binary
-    bytes32 public constant buildTeamImageId = ImageID.MAKE_TEAM_ID;
+    bytes32 public constant buildTeamImageId = TeamImageID.MAKE_TEAM_ID;
 
     //  ─────────────────────────────────────────────────────────────────────────────
     //  Setup

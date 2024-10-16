@@ -24,7 +24,9 @@ use alloy_primitives::{Address, U256};
 use anyhow::{Context, Result};
 use clap::Parser;
 use common::cid::{Attribute, ComputeCid, Player, Skill};
-use methods::VERIFY_CID_ELF;
+use array_init::array_init;
+use methods_player::VERIFY_CID_ELF;
+use methods_team::MAKE_TEAM_ELF;
 use risc0_ethereum_contracts::encode_seal;
 use risc0_zkvm::{default_prover, ExecutorEnv, ProverOpts, VerifierContext};
 use risc0_steel::{
@@ -35,7 +37,7 @@ use risc0_steel::{
 use tokio::task;
 use url::Url;
 
-// `IEvenNumber` interface automatically generated via the alloy `sol!` macro.
+// `Players` interface automatically generated via the alloy `sol!` macro.
 alloy::sol!(
     #[sol(rpc, all_derives)]
     "../contracts/Players.sol"
@@ -47,7 +49,7 @@ alloy::sol! {
         function ownerOf(uint256 tokenId) external view returns (address owner);
     }
 
-    struct Journal {
+    struct VerifyJournal {
         Commitment commitment;
         address owner;
     }
@@ -98,37 +100,7 @@ async fn main() -> Result<()> {
     // the input number is ABI-encoded to match the format expected by the guest code running in the zkVM.
     // let input = args.input.abi_encode();
 
-    let player = Player {
-        name: "Lionel Messi".to_string(),
-        jersey_number: 10,
-        description: "A professional footballer who plays as a forward for Paris Saint-Germain and the Argentina national team.".to_string(),
-        external_url: "https://en.wikipedia.org/wiki/Lionel_Messi".to_string(),
-        image: "https://upload.wikimedia.org/wikipedia/commons/4/47/Lionel_Messi_20180626.jpg".to_string(),
-        tier: 1,
-        overall_rating: 94.0,
-        skill_multiplier: 1.0,
-        skill: Skill {
-            speed: 90,
-            shooting: 95,
-            passing: 90,
-            dribbling: 96,
-            defense: 32,
-            physical: 68,
-            goal_tending: 0,
-        },
-        attributes: vec![
-            Attribute {
-                display_type: "Physical".to_string(),
-                trait_type: "Height".to_string(),
-                value: 170.0,
-            },
-            Attribute {
-                display_type: "Physical".to_string(),
-                trait_type: "Weight".to_string(),
-                value: 72.0,
-            },
-        ],
-    };
+    let player = gen_test_player();
 
     let token_id: U256 = U256::from(0);
 
@@ -159,6 +131,7 @@ async fn main() -> Result<()> {
     } else {
         env.into_input().await?
     };
+    let cloned_evm_input = evm_input.clone();
 
     let prove_info = task::spawn_blocking(move || {
         let env = ExecutorEnv::builder()
@@ -176,18 +149,78 @@ async fn main() -> Result<()> {
         )
     })
     .await?
-    .context("failed to create proof")?;
+    .context("failed to create CID verification proof")?;
     let receipt = prove_info.receipt;
     let journal = &receipt.journal.bytes;
 
     // Decode and log the commitment
-    let journal = Journal::abi_decode(journal, true).context("invalid journal")?;
+    let journal = VerifyJournal::abi_decode(journal, true).context("invalid journal")?;
     log::debug!("Steel commitment: {:?}", journal.commitment);
 
     // ABI encode the seal.
     let seal = encode_seal(&receipt).context("invalid receipt")?;
 
-    println!("Journal: {:?}", journal.owner);
+    println!("Journal owner: {:?}", journal.owner);
+
+    let players: [Player; 11] = array_init(|_| gen_test_player());
+    let token_ids: [U256; 11] = [token_id; 11];
+
+    let make_team_proof = task::spawn_blocking(move || {
+        let env = ExecutorEnv::builder()
+            .write(&cloned_evm_input)?
+            .write(&journal.owner)?
+            .write(&players)?
+            .write(&token_ids)?
+            .add_assumption(receipt)
+            .build()
+            .unwrap();
+
+        default_prover().prove_with_ctx(
+            env,
+            &VerifierContext::default(),
+            MAKE_TEAM_ELF,
+            &ProverOpts::groth16(),
+        )
+    }).await?
+    .context("failed to make team create proof")?;
+
+    let receipt = make_team_proof.receipt;
+    let journal = &receipt.journal.bytes;
+
 
     Ok(())
+}
+
+fn gen_test_player() -> Player {
+    Player {
+        name: "Lionel Messi".to_string(),
+        jersey_number: 10,
+        description: "A professional footballer who plays as a forward for Paris Saint-Germain and the Argentina national team.".to_string(),
+        external_url: "https://en.wikipedia.org/wiki/Lionel_Messi".to_string(),
+        image: "https://upload.wikimedia.org/wikipedia/commons/4/47/Lionel_Messi_20180626.jpg".to_string(),
+        tier: 1,
+        overall_rating: 94.0,
+        skill_multiplier: 1.0,
+        skill: Skill {
+            speed: 90,
+            shooting: 95,
+            passing: 90,
+            dribbling: 96,
+            defense: 32,
+            physical: 68,
+            goal_tending: 0,
+        },
+        attributes: vec![
+            Attribute {
+                display_type: "Physical".to_string(),
+                trait_type: "Height".to_string(),
+                value: 170.0,
+            },
+            Attribute {
+                display_type: "Physical".to_string(),
+                trait_type: "Weight".to_string(),
+                value: 72.0,
+            },
+        ],
+    }
 }

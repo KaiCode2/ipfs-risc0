@@ -23,8 +23,8 @@ import {IRiscZeroVerifier} from "risc0/IRiscZeroVerifier.sol";
 import {RiscZeroGroth16Verifier} from "risc0/groth16/RiscZeroGroth16Verifier.sol";
 import {ControlID} from "risc0/groth16/ControlID.sol";
 
-import {EvenNumber} from "../contracts/EvenNumber.sol";
-import {Players} from "../contracts/Players.sol";
+import {Players} from "src/Players.sol";
+import {Team} from "src/Team.sol";
 
 /// @notice Deployment script for the RISC Zero starter project.
 /// @dev Use the following environment variable to control the deployment:
